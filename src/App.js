@@ -7,16 +7,59 @@ import { Posts } from './components/Posts';
 import { ProgressSpinner } from './components/ProgressSpinner';
 import { TopicSearch } from './components/TopicSearch';
 import { UserSearch } from './components/UserSearch';
+import { NewPost } from './components/NewPost';
+import { arweave, buildQuery, createPostInfo, delay, delayResults } from './lib/api';
 import './App.css';
 
-async function getPostInfos() {
-  return [];
-}
+async function waitForNewPosts(txid) {
+  let count = 0;
+  let foundPost = null;
+  let posts = [];
+  
+  while (!foundPost) {
+    count += 1;
+    console.log(`attempt ${count}`);
+    await delay(2000 * count);
+    posts = await getPostInfos();
+    foundPost = posts.find(p => p.txid === txid);
+  }
+  
+  let i = posts.indexOf(foundPost);
+  posts.unshift(posts.splice(i,1)[0]);
+  return posts;
+ }
+
+ async function getPostInfos(ownerAddress, topic) {
+  const query = buildQuery({address: ownerAddress, topic});
+  const results = await arweave.api.post('/graphql', query)
+    .catch(err => {
+      console.error('GraphQL query failed');
+       throw new Error(err);
+    });
+  const edges = results.data.data.transactions.edges;
+  console.log(edges);
+  return await delayResults(100,edges.map(edge => createPostInfo(edge.node)));
+ }
 
 const App = () => {
   
+  const [postInfos, setPostInfos] = React.useState([]);
+  const [isSearching, setIsSearching] = React.useState(false);
+  const [isWalletConnected, setIsWalletConnected] = React.useState(false);
+
+  async function waitForPost(txid) {
+    setIsSearching(true)
+    let posts = await waitForNewPosts(txid);
+    setPostInfos(posts)
+    setIsSearching(false);
+  }
+
   React.useEffect(() => {
-    getPostInfos();
+    setIsSearching(true)
+    getPostInfos().then(posts => {
+      setPostInfos(posts);
+      setIsSearching(false);
+    });
   }, [])
 
   return (
@@ -24,13 +67,19 @@ const App = () => {
       <div id="content">
         <aside>
           <Navigation />
+          <WalletSelectButton setIsConnected={() => setIsWalletConnected(true)}/>
+          <ProfileButton isWalletConnected={isWalletConnected} />
         </aside>
         <main>
           <Routes>
             <Route path="/" name="home" element={
-            <Home 
-
-            />}
+              <Home
+              isWalletConnected={isWalletConnected}
+              isSearching={isSearching}
+              postInfos={postInfos}
+              onPostMessage={waitForPost}
+              />
+            }
             />
             <Route path="/topics" element={<Topics />}>
               <Route path="/topics/" element={<TopicSearch />} />
@@ -51,6 +100,9 @@ const Home = (props) => {
   return (
     <>
       <header>Home</header>
+      <NewPost isLoggedIn={props.isWalletConnected} onPostMessage={props.onPostMessage} />
+      {props.isSearching && <ProgressSpinner />}
+      <Posts postInfos={props.postInfos} />
     </>
   );
 };

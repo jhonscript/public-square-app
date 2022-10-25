@@ -20,6 +20,19 @@ const PostItem = (props) => {
   const [imgSrc, setImgSrc] = React.useState(props.postInfo.imgSrc || 'img_avatar.png');
 
   React.useEffect(() => {
+    const getAccountInfo = async () => {
+      setOwnerName(abbreviateAddress(props.postInfo.owner));
+      const info = await props.postInfo.account;
+      setOwnerName(info.handle);
+      if(info.handle[0] == '@') {
+        props.postInfo.imgSrc = info.profile.avatarURL;
+        setImgSrc(info.profile.avatarURL);
+        setOwnerName(info.profile.name);
+        setOwnerHandle(info.handle);
+      }
+    }
+    getAccountInfo();
+
     let newPostMessage = "";
     let newStatus = "";
     
@@ -49,7 +62,7 @@ const PostItem = (props) => {
 
         if (isCancelled)
           return;
-
+        
         setPostMessage(newPostMessage);
         setStatusMessage(newStatus);
       }
@@ -65,20 +78,26 @@ const PostItem = (props) => {
     
   }, [props.postInfo]);
 
+  const renderTopic = (topic) => {
+    if (topic)
+      return (<Link to={`/topics/${topic}`} className="postTopic">#{topic}</Link>)
+   }
+
   return (
     <div className="postItem">
       <div className="postLayout">
       <img className="profileImage" src={imgSrc} alt="ProfileImage" />
         <div>
-          <div className="postOwnerRow">
+          <div className="postOwnerRow">            
             <Link to={`/users/${props.postInfo.owner}`}>{ownerName}</Link>
             <span className="gray"> <span className="handle">{ownerHandle}</span> • </span>
             <time>{getPostTime(props.postInfo.timestamp)}</time>
           </div>
-          <div className="postRow">
+          <div className="postRow">            
             {props.postInfo.message || postMessage}
             {statusMessage && <div className="status"> {statusMessage}</div>}
           </div>
+          {renderTopic(props.postInfo.topic)}
         </div>
       </div>
     </div>
